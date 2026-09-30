@@ -83,6 +83,37 @@ io.on('connection',(socket)=>{
     console.log('Group '+groupNum+' joined '+pin);
   });
 
+  // ===== REJOIN AFTER DISCONNECT =====
+  socket.on('ib-rejoin',(data)=>{
+    const{pin,groupNum}=data;
+    if(!interactiveBoards[pin]){
+      socket.emit('ib-rejoin-error',{message:'Session ended.'});
+      return;
+    }
+    const g=interactiveBoards[pin];
+    if(!g.groups[groupNum]){
+      socket.emit('ib-rejoin-error',{message:'Group not found.'});
+      return;
+    }
+    socket.join(`ib-${pin}`);
+    socket.gamePIN=pin;
+    socket.isIbPlayer=true;
+    socket.ibGroupNum=parseInt(groupNum);
+    g.groups[groupNum].connected=true;
+    
+    let gameState='waiting';
+    if(g.questionActive && !g.groups[groupNum].submitted)gameState='answering';
+    
+    socket.emit('ib-rejoin-success',{pin,groupNum:parseInt(groupNum),gameState});
+    io.to(`ib-host-${pin}`).emit('ib-groups-update',{groups:g.groups});
+    
+    if(g.questionActive && !g.groups[groupNum].submitted){
+      socket.emit('ib-question-start',{points:g.points,timeLimit:g.timeLimit});
+    }
+    
+    console.log('Group '+groupNum+' reconnected to '+pin);
+  });
+
   socket.on('ib-start-question',(data)=>{
     const pin=socket.gamePIN;
     if(!pin||!interactiveBoards[pin])return;

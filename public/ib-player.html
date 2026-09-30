@@ -84,11 +84,10 @@ const socket=io({
   reconnectionAttempts: 20,
   transports: ['websocket', 'polling']
 });
-let groupNum=0,timerInterval=null,currentPoints=0,currentPin='';
+let groupNum=0,timerInterval=null,currentPoints=0,currentPin='',isJoined=false;
 
 document.getElementById('pin-input').addEventListener('input',function(){
   const pin=this.value.trim();
-  currentPin=pin;
   clearInterval(window.refreshInterval);
   if(pin.length===4){
     socket.emit('ib-get-info',{pin});
@@ -143,11 +142,14 @@ function joinGame(){
     return;
   }
   groupNum=parseInt(gnum);
+  currentPin=pin;
+  isJoined=true;
   socket.emit('ib-join',{pin,groupNum:gnum});
 }
 
 socket.on('ib-join-success',(d)=>{
   groupNum=d.groupNum;
+  isJoined=true;
   document.getElementById('join-screen').style.display='none';
   document.getElementById('waiting-screen').style.display='block';
   document.getElementById('my-group').textContent='Group '+d.groupNum;
@@ -156,6 +158,7 @@ socket.on('ib-join-success',(d)=>{
 socket.on('ib-join-error',(d)=>{
   document.getElementById('join-error').textContent=d.message;
   document.getElementById('join-error').style.display='block';
+  isJoined=false;
 });
 
 socket.on('ib-question-start',(d)=>{
@@ -239,11 +242,34 @@ socket.on('ib-host-disconnected',()=>{
   document.body.innerHTML='<div class="container" style="text-align:center;"><div class="glass-card"><h1 style="color:#e94560;">😢 Host Disconnected</h1><p style="color:#aaa;">The teacher has ended the session.</p><button class="btn btn-primary" onclick="location.reload()">🔄 Reconnect</button></div></div>';
 });
 
-// Auto-reconnect: rejoin if disconnected and page reloads
+// ===== AUTO-RECONNECT =====
 socket.on('connect',()=>{
-  if(groupNum>0 && currentPin){
-    socket.emit('ib-join',{pin:currentPin,groupNum:groupNum});
+  console.log('Socket connected');
+  if(isJoined && currentPin && groupNum>0){
+    console.log('Auto-rejoining group '+groupNum);
+    socket.emit('ib-rejoin',{pin:currentPin,groupNum:groupNum});
   }
+});
+
+socket.on('ib-rejoin-success',(d)=>{
+  console.log('Rejoined!');
+  groupNum=d.groupNum;
+  document.getElementById('join-screen').style.display='none';
+  if(d.gameState==='answering'){
+    document.getElementById('waiting-screen').style.display='none';
+    document.getElementById('gameover-screen').style.display='none';
+    document.getElementById('answer-screen').style.display='block';
+  } else {
+    document.getElementById('answer-screen').style.display='none';
+    document.getElementById('gameover-screen').style.display='none';
+    document.getElementById('waiting-screen').style.display='block';
+    document.getElementById('my-group').textContent='Group '+d.groupNum;
+  }
+});
+
+socket.on('ib-rejoin-error',(d)=>{
+  console.log('Rejoin failed: '+d.message);
+  isJoined=false;
 });
 </script>
 </body>
