@@ -30,7 +30,7 @@ io.on('connection',(socket)=>{
     if(interactiveBoards[pin]){socket.emit('ib-created',{pin:generateCode()});return;}
     const numGroups=data.numGroups||4;
     const groups={};
-    for(let i=1;i<=numGroups;i++){groups[i]={name:'Group '+i,score:0,answer:'',submitted:false,judged:null,answerOrder:null};}
+    for(let i=1;i<=numGroups;i++){groups[i]={name:'Group '+i,score:0,answer:'',submitted:false,judged:null,answerOrder:null,connected:false};}
     interactiveBoards[pin]={
       hostSocket:socket,
       groups:groups,
@@ -57,6 +57,9 @@ io.on('connection',(socket)=>{
     socket.gamePIN=pin;
     socket.isIbPlayer=true;
     socket.ibGroupNum=parseInt(groupNum);
+    if(interactiveBoards[pin].groups[groupNum]){
+      interactiveBoards[pin].groups[groupNum].connected=true;
+    }
     socket.emit('ib-join-success',{pin,groupNum:parseInt(groupNum)});
     io.to(`ib-host-${pin}`).emit('ib-groups-update',{groups:interactiveBoards[pin].groups});
     console.log('Group '+groupNum+' joined '+pin);
@@ -149,6 +152,12 @@ io.on('connection',(socket)=>{
       if(socket.isIbHost){
         io.to(`ib-${gc}`).emit('ib-host-disconnected');
         delete interactiveBoards[gc];
+      } else if(socket.isIbPlayer && socket.ibGroupNum){
+        const g=interactiveBoards[gc];
+        if(g.groups[socket.ibGroupNum]){
+          g.groups[socket.ibGroupNum].connected=false;
+        }
+        io.to(`ib-host-${gc}`).emit('ib-groups-update',{groups:g.groups});
       }
     }
   });
