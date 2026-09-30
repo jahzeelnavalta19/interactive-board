@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>🎯 Interactive Board - Host</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.popup-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:flex;justify-content:center;align-items:center;z-index:100;}
+.popup-box{background:#16213e;border-radius:24px;padding:40px;text-align:center;max-width:450px;width:90%;border:2px solid #9b59b6;box-shadow:0 0 50px rgba(155,89,182,0.3);}
+.popup-box h2{color:#ffd700;margin-bottom:20px;}
+.popup-box select,.popup-box input{width:100%;padding:14px;font-size:1.1em;border-radius:50px;background:#0a0a1a;color:white;border:2px solid #9b59b6;text-align:center;margin:10px 0;}
+.group-card{background:rgba(255,255,255,0.05);border-radius:16px;padding:15px;margin:10px 0;border-left:4px solid #9b59b6;}
+.group-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.group-name{font-size:1.3em;font-weight:900;color:#ffd700;}
+.group-score{font-size:1.2em;color:#00b894;font-weight:900;}
+.group-answer{background:rgba(0,0,0,0.3);padding:10px;border-radius:8px;font-size:1.1em;margin:8px 0;min-height:40px;color:#fff;}
+.judge-buttons{display:flex;gap:10px;margin-top:8px;}
+.btn-small{padding:8px 20px;font-size:0.9em;border-radius:20px;border:none;cursor:pointer;font-weight:900;}
+.btn-correct{background:#00b894;color:white;}
+.btn-wrong{background:#e94560;color:white;}
+.btn-correct:disabled,.btn-wrong:disabled{opacity:0.4;cursor:not-allowed;}
+.judged-correct{border-left-color:#00b894 !important;}
+.judged-wrong{border-left-color:#e94560 !important;}
+</style>
+</head>
+<body>
+<canvas class="particles" id="particles"></canvas>
+
+<!-- SETUP POPUP -->
+<div class="popup-overlay" id="setup-popup">
+<div class="popup-box">
+<h2>🎯 Interactive Board</h2>
+<p style="color:#aaa;margin-bottom:10px;">Teacher Control Panel</p>
+<p style="color:#aaa;margin:15px 0;">Select Section</p>
+<select id="ib-section-select">
+<option value="11-TAURUS">11-TAURUS</option><option value="11-GEMINI">11-GEMINI</option><option value="11-AQUILA">11-AQUILA</option><option value="11-PISCES">11-PISCES</option><option value="11-ARIES">11-ARIES</option><option value="11-SCORPIUS">11-SCORPIUS</option><option value="12-PYTHAGORAS">12-PYTHAGORAS</option><option value="11-AQUARIUS">11-AQUARIUS</option>
+</select>
+<p style="color:#aaa;margin:15px 0;">Number of Groups</p>
+<select id="ib-group-count">
+<option value="3">3 Groups</option><option value="4" selected>4 Groups</option><option value="5">5 Groups</option><option value="6">6 Groups</option><option value="7">7 Groups</option><option value="8">8 Groups</option><option value="9">9 Groups</option><option value="10">10 Groups</option>
+</select>
+<button class="btn btn-primary" onclick="createBoard()" style="background:#9b59b6;width:100%;margin-top:20px;">🚀 Create Board</button>
+</div>
+</div>
+
+<div class="container" id="main-container" style="display:none;">
+<div id="lobby-screen">
+<h1>🎯 Interactive Board</h1>
+<div class="glass-card pin-display">
+<div class="pin-label">Game PIN</div>
+<div class="pin-number" id="game-pin">----</div>
+<p style="font-size:1.5em;color:#ffd700;word-break:break-all;margin:15px 0;" id="big-url"></p>
+<p style="color:#aaa;font-size:0.85em;">📱 Students type this URL</p>
+</div>
+<div class="glass-card">
+<h3 style="color:#9b59b6;">👥 Groups Connected</h3>
+<div id="group-list"><p style="color:#aaa;">Waiting for groups...</p></div>
+</div>
+<button class="btn btn-success" id="start-btn" onclick="startQuestion()" disabled>🚀 Start Question</button>
+</div>
+
+<div id="question-screen" style="display:none;">
+<div class="glass-card" style="text-align:center;">
+<h2 style="color:#9b59b6;">Question <span id="q-number">1</span></h2>
+<p style="font-size:1.2em;color:#ffd700;">Points: <span id="q-points">1</span> | Time: <span id="q-time">30</span>s</p>
+<div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%;"></div></div>
+<div class="timer-text" id="timer-text">30</div>
+</div>
+<div class="glass-card">
+<h3 style="color:#9b59b6;">📝 Live Answers</h3>
+<div id="answers-list"><p style="color:#aaa;">Waiting for answers...</p></div>
+</div>
+<div style="text-align:center;margin-top:20px;">
+<button class="btn btn-warning" id="next-btn" onclick="nextQuestion()" style="display:none;">▶ Next Question</button>
+<button class="btn btn-primary" onclick="endGame()" style="background:#e94560;">⏹ End Game</button>
+</div>
+</div>
+
+<div id="gameover-screen" style="display:none;">
+<h1>🏆 Game Over!</h1>
+<h2>Final Group Standings</h2>
+<div class="glass-card">
+<div class="leaderboard" id="final-leaderboard"></div>
+</div>
+</div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const canvas=document.getElementById('particles'),ctx=canvas.getContext('2d');
+canvas.width=window.innerWidth;canvas.height=window.innerHeight;
+const pts=[];for(let i=0;i<40;i++)pts.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,r:Math.random()*2+1,speed:Math.random()*0.5+0.2,opacity:Math.random()*0.4+0.1});
+function anim(){ctx.clearRect(0,0,canvas.width,canvas.height);pts.forEach(p=>{p.y-=p.speed;if(p.y<-10){p.y=canvas.height+10;p.x=Math.random()*canvas.width;}ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${p.opacity})`;ctx.fill();});requestAnimationFrame(anim);}anim();
+
+const socket=io();
+let gamePIN='';
+let timerInterval=null;
+let currentGroups={};
+
+function createBoard(){
+  const sec=document.getElementById('ib-section-select').value;
+  const num=parseInt(document.getElementById('ib-group-count').value);
+  socket.emit('ib-create',{section:sec,numGroups:num});
+}
+
+socket.on('ib-created',(d)=>{
+  gamePIN=d.pin;
+  document.getElementById('setup-popup').style.display='none';
+  document.getElementById('main-container').style.display='block';
+  document.getElementById('game-pin').textContent=gamePIN;
+  document.getElementById('big-url').textContent='https://interactive-board.onrender.com/ib-player.html';
+  renderGroups(d.groups);
+});
+
+socket.on('ib-groups-update',(d)=>{
+  currentGroups=d.groups;
+  renderGroups(d.groups);
+  document.getElementById('start-btn').disabled=Object.keys(d.groups).length===0;
+});
+
+function renderGroups(groups){
+  const list=document.getElementById('group-list');
+  let html='';
+  for(let i=1;i<=Object.keys(groups).length;i++){
+    const g=groups[i];
+    if(g){
+      html+=`<div class="player-item"><span style="font-size:1.3em;font-weight:900;color:#9b59b6;">${g.name}</span><span style="flex:1;"></span><span style="color:#aaa;">${g.score} pts</span></div>`;
+    }
+  }
+  list.innerHTML=html||'<p style="color:#aaa;">Waiting for groups...</p>';
+}
+
+function startQuestion(){
+  const points=prompt('Points for this question:','1');
+  const time=prompt('Timer (seconds):','30');
+  socket.emit('ib-start-question',{points:parseInt(points)||1,timeLimit:parseInt(time)||30});
+}
+
+socket.on('ib-question-started',(d)=>{
+  document.getElementById('lobby-screen').style.display='none';
+  document.getElementById('question-screen').style.display='block';
+  document.getElementById('q-points').textContent=d.points;
+  document.getElementById('q-time').textContent=d.timeLimit;
+  document.getElementById('next-btn').style.display='none';
+  document.getElementById('answers-list').innerHTML='<p style="color:#aaa;">Waiting for answers...</p>';
+  let tl=d.timeLimit;
+  document.getElementById('timer-text').textContent=tl;
+  document.getElementById('timer-fill').style.width='100%';
+  clearInterval(timerInterval);
+  timerInterval=setInterval(()=>{
+    tl--;
+    document.getElementById('timer-text').textContent=tl;
+    document.getElementById('timer-fill').style.width=(tl/d.timeLimit*100)+'%';
+    if(tl<=0)clearInterval(timerInterval);
+  },1000);
+});
+
+socket.on('ib-answer-received',(d)=>{
+  renderAnswers(d.groups);
+});
+
+socket.on('ib-judged',(d)=>{
+  currentGroups=d.groups;
+  renderAnswers(d.groups);
+});
+
+socket.on('ib-time-up',()=>{
+  document.getElementById('next-btn').style.display='inline-block';
+});
+
+function renderAnswers(groups){
+  currentGroups=groups;
+  const list=document.getElementById('answers-list');
+  let html='';
+  for(let i=1;i<=Object.keys(groups).length;i++){
+    const g=groups[i];
+    if(g){
+      let borderClass='';
+      if(g.judged===true)borderClass='judged-correct';
+      else if(g.judged===false)borderClass='judged-wrong';
+      html+=`<div class="group-card ${borderClass}">
+        <div class="group-header">
+          <span class="group-name">${g.name}</span>
+          <span class="group-score">${g.score} pts</span>
+        </div>
+        <div class="group-answer">${g.answer||'<span style="color:#666;">Waiting...</span>'}</div>
+        <div class="judge-buttons">
+          <button class="btn-small btn-correct" onclick="judge(${i},true)" ${g.judged!==null?'disabled':''}>✅ Correct</button>
+          <button class="btn-small btn-wrong" onclick="judge(${i},false)" ${g.judged!==null?'disabled':''}>❌ Wrong</button>
+        </div>
+      </div>`;
+    }
+  }
+  list.innerHTML=html;
+}
+
+function judge(groupNum,correct){
+  socket.emit('ib-judge',{groupNum,correct});
+}
+
+function nextQuestion(){
+  socket.emit('ib-next-question');
+}
+
+socket.on('ib-ready-next',(d)=>{
+  document.getElementById('question-screen').style.display='none';
+  document.getElementById('lobby-screen').style.display='block';
+  document.getElementById('q-number').textContent=d.questionNumber;
+  renderGroups(d.groups);
+  document.getElementById('next-btn').style.display='none';
+  document.getElementById('start-btn').disabled=false;
+});
+
+function endGame(){
+  if(confirm('End the game and show final scores?')){
+    socket.emit('ib-end-game');
+  }
+}
+
+socket.on('ib-game-ended',(d)=>{
+  document.getElementById('question-screen').style.display='none';
+  document.getElementById('lobby-screen').style.display='none';
+  document.getElementById('gameover-screen').style.display='block';
+  const lb=document.getElementById('final-leaderboard'),rc=['gold','silver','bronze'],em=['🥇','🥈','🥉'];
+  lb.innerHTML=d.leaderboard.map((g,i)=>`
+    <div class="leaderboard-item">
+      <span class="leaderboard-rank ${rc[i]||''}">${em[i]||`#${i+1}`}</span>
+      <span class="leaderboard-name">${g.name}</span>
+      <span class="leaderboard-score">${g.score} pts</span>
+    </div>`).join('');
+});
+</script>
+</body>
+</html>

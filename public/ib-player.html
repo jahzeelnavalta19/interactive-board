@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>🎯 Interactive Board - Player</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.answer-input{width:100%;padding:20px;font-size:1.3em;border-radius:16px;background:#16213e;color:white;border:3px solid #9b59b6;text-align:center;outline:none;font-family:'Nunito',sans-serif;}
+.answer-input:focus{border-color:#ffd700;box-shadow:0 0 25px rgba(255,215,0,0.3);}
+</style>
+</head>
+<body>
+<canvas class="particles" id="particles"></canvas>
+<div class="container">
+<div id="join-screen">
+<h1>🎯 Interactive Board</h1>
+<div class="glass-card">
+<div class="input-group">
+<label style="display:block;margin-bottom:10px;color:#aaa;font-weight:700;">Game PIN</label>
+<input type="text" id="pin-input" placeholder="____" maxlength="4" inputmode="numeric" style="text-align:center;font-size:1.5em;">
+</div>
+<div class="input-group">
+<label style="display:block;margin-bottom:10px;color:#aaa;font-weight:700;">Select Your Group</label>
+<select id="group-select" style="padding:14px;font-size:1.3em;border-radius:50px;background:#16213e;color:white;border:2px solid #9b59b6;width:200px;text-align:center;">
+<option value="1">Group 1</option>
+<option value="2">Group 2</option>
+<option value="3">Group 3</option>
+<option value="4">Group 4</option>
+<option value="5">Group 5</option>
+<option value="6">Group 6</option>
+<option value="7">Group 7</option>
+<option value="8">Group 8</option>
+<option value="9">Group 9</option>
+<option value="10">Group 10</option>
+</select>
+</div>
+<div id="join-error" style="color:#e94560;margin:10px 0;display:none;font-weight:700;"></div>
+<button class="btn btn-success" onclick="joinGame()" style="font-size:1.3em;padding:20px 40px;">🎯 Join!</button>
+</div>
+</div>
+
+<div id="waiting-screen" style="display:none;">
+<div class="glass-card" style="text-align:center;">
+<h2>✅ Connected!</h2>
+<p style="font-size:2.5em;font-weight:900;color:#9b59b6;" id="my-group"></p>
+<p class="waiting-text">Waiting for teacher to start the question...</p>
+<p style="color:#aaa;margin-top:15px;">✍️ Discuss with your group!</p>
+</div>
+</div>
+
+<div id="answer-screen" style="display:none;">
+<div class="glass-card">
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+<div style="color:#aaa;font-weight:700;">Question <span id="q-num">1</span></div>
+<div style="color:#ffd700;font-weight:900;font-size:1.3em;">🏆 <span id="group-score">0</span> pts</div>
+</div>
+<div class="timer-bar"><div class="timer-fill" id="timer-fill" style="width:100%;"></div></div>
+<div class="timer-text" id="timer-text">30</div>
+<div style="text-align:center;margin:20px 0;">
+<p style="font-size:1.3em;color:#ffd700;margin-bottom:15px;">Type your answer:</p>
+<input type="text" id="answer-input" class="answer-input" placeholder="Your answer here..." maxlength="100" autocomplete="off">
+</div>
+<button class="btn btn-success" id="submit-btn" onclick="submitAnswer()" style="width:100%;font-size:1.3em;padding:20px;">📤 Submit Answer</button>
+<div id="submit-feedback" style="margin-top:20px;text-align:center;"></div>
+</div>
+</div>
+
+<div id="gameover-screen" style="display:none;">
+<div class="glass-card" style="text-align:center;">
+<h1>🏆 Game Over!</h1>
+<div class="leaderboard" id="final-leaderboard"></div>
+</div>
+</div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const canvas=document.getElementById('particles'),ctx=canvas.getContext('2d');
+canvas.width=window.innerWidth;canvas.height=window.innerHeight;
+const pts=[];for(let i=0;i<30;i++)pts.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,r:Math.random()*2+1,speed:Math.random()*0.4+0.15,opacity:Math.random()*0.3+0.1});
+function anim(){ctx.clearRect(0,0,canvas.width,canvas.height);pts.forEach(p=>{p.y-=p.speed;if(p.y<-10){p.y=canvas.height+10;p.x=Math.random()*canvas.width;}ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${p.opacity})`;ctx.fill();});requestAnimationFrame(anim);}anim();
+
+const socket=io();
+let groupNum=0,timerInterval=null,currentPoints=0;
+
+function joinGame(){
+  const pin=document.getElementById('pin-input').value.trim();
+  const gnum=document.getElementById('group-select').value;
+  if(!pin||pin.length!==4){
+    document.getElementById('join-error').textContent='Enter a 4-digit PIN!';
+    document.getElementById('join-error').style.display='block';
+    return;
+  }
+  groupNum=parseInt(gnum);
+  socket.emit('ib-join',{pin,groupNum:gnum});
+}
+
+socket.on('ib-join-success',(d)=>{
+  groupNum=d.groupNum;
+  document.getElementById('join-screen').style.display='none';
+  document.getElementById('waiting-screen').style.display='block';
+  document.getElementById('my-group').textContent='Group '+d.groupNum;
+});
+
+socket.on('ib-join-error',(d)=>{
+  document.getElementById('join-error').textContent=d.message;
+  document.getElementById('join-error').style.display='block';
+});
+
+socket.on('ib-question-start',(d)=>{
+  currentPoints=d.points;
+  document.getElementById('waiting-screen').style.display='none';
+  document.getElementById('gameover-screen').style.display='none';
+  document.getElementById('answer-screen').style.display='block';
+  document.getElementById('answer-input').value='';
+  document.getElementById('answer-input').disabled=false;
+  document.getElementById('submit-btn').disabled=false;
+  document.getElementById('submit-feedback').innerHTML='';
+  document.getElementById('submit-btn').textContent='📤 Submit Answer';
+  let tl=d.timeLimit;
+  document.getElementById('timer-text').textContent=tl;
+  document.getElementById('timer-fill').style.width='100%';
+  clearInterval(timerInterval);
+  timerInterval=setInterval(()=>{
+    tl--;
+    document.getElementById('timer-text').textContent=tl;
+    document.getElementById('timer-fill').style.width=(tl/d.timeLimit*100)+'%';
+    if(tl<=0){clearInterval(timerInterval);}
+  },1000);
+});
+
+function submitAnswer(){
+  const ans=document.getElementById('answer-input').value.trim();
+  if(!ans){
+    document.getElementById('submit-feedback').innerHTML='<p style="color:#e94560;">Type an answer first!</p>';
+    return;
+  }
+  socket.emit('ib-submit-answer',{answer:ans});
+}
+
+socket.on('ib-answer-submitted',()=>{
+  document.getElementById('submit-feedback').innerHTML='<p style="color:#00b894;font-size:1.2em;">✅ Answer submitted! Waiting for teacher...</p>';
+  document.getElementById('answer-input').disabled=true;
+  document.getElementById('submit-btn').disabled=true;
+});
+
+socket.on('ib-judged-player',(d)=>{
+  if(d.groupNum===groupNum){
+    const fb=document.getElementById('submit-feedback');
+    if(d.correct){
+      fb.innerHTML='<div class="feedback correct" style="font-size:2em;">✅ Correct!</div>';
+    } else {
+      fb.innerHTML='<div class="feedback wrong" style="font-size:2em;">❌ Wrong!</div>';
+    }
+  }
+});
+
+socket.on('ib-time-up',()=>{
+  clearInterval(timerInterval);
+  if(!document.getElementById('submit-btn').disabled){
+    document.getElementById('submit-feedback').innerHTML='<p style="color:#e94560;font-size:1.2em;">⏰ Time is up!</p>';
+    document.getElementById('answer-input').disabled=true;
+    document.getElementById('submit-btn').disabled=true;
+  }
+});
+
+socket.on('ib-ready-next-player',()=>{
+  document.getElementById('answer-screen').style.display='none';
+  document.getElementById('waiting-screen').style.display='block';
+});
+
+socket.on('ib-game-ended',(d)=>{
+  clearInterval(timerInterval);
+  document.getElementById('waiting-screen').style.display='none';
+  document.getElementById('answer-screen').style.display='none';
+  document.getElementById('gameover-screen').style.display='block';
+  const lb=document.getElementById('final-leaderboard');
+  const rc=['gold','silver','bronze'],em=['🥇','🥈','🥉'];
+  lb.innerHTML=d.leaderboard.map((g,i)=>`
+    <div class="leaderboard-item">
+      <span class="leaderboard-rank ${rc[i]||''}">${em[i]||`#${i+1}`}</span>
+      <span class="leaderboard-name">${g.name}</span>
+      <span class="leaderboard-score">${g.score} pts</span>
+    </div>`).join('');
+});
+
+socket.on('ib-host-disconnected',()=>{
+  document.body.innerHTML='<div class="container" style="text-align:center;"><div class="glass-card"><h1 style="color:#e94560;">😢 Host Disconnected</h1><p style="color:#aaa;">The teacher has ended the session.</p><button class="btn btn-primary" onclick="location.reload()">🔄 Reconnect</button></div></div>';
+});
+</script>
+</body>
+</html>
