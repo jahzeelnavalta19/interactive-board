@@ -29,16 +29,7 @@
 <div class="input-group">
 <label style="display:block;margin-bottom:10px;color:#aaa;font-weight:700;">Select Your Group</label>
 <select id="group-select" style="padding:14px;font-size:1.3em;border-radius:50px;background:#16213e;color:white;border:2px solid #9b59b6;width:200px;text-align:center;">
-<option value="1">Group 1</option>
-<option value="2">Group 2</option>
-<option value="3">Group 3</option>
-<option value="4">Group 4</option>
-<option value="5">Group 5</option>
-<option value="6">Group 6</option>
-<option value="7">Group 7</option>
-<option value="8">Group 8</option>
-<option value="9">Group 9</option>
-<option value="10">Group 10</option>
+<option value="">-- Enter PIN first --</option>
 </select>
 </div>
 <div id="join-error" style="color:#e94560;margin:10px 0;display:none;font-weight:700;"></div>
@@ -90,11 +81,42 @@ function anim(){ctx.clearRect(0,0,canvas.width,canvas.height);pts.forEach(p=>{p.
 const socket=io();
 let groupNum=0,timerInterval=null,currentPoints=0;
 
+document.getElementById('pin-input').addEventListener('input',function(){
+  const pin=this.value.trim();
+  if(pin.length===4){
+    socket.emit('ib-get-info',{pin});
+  } else {
+    const select=document.getElementById('group-select');
+    select.innerHTML='<option value="">-- Enter PIN first --</option>';
+  }
+});
+
+socket.on('ib-info',(d)=>{
+  const select=document.getElementById('group-select');
+  select.innerHTML='';
+  for(let i=1;i<=d.numGroups;i++){
+    const opt=document.createElement('option');
+    opt.value=i;
+    opt.textContent='Group '+i;
+    select.appendChild(opt);
+  }
+});
+
+socket.on('ib-info-error',(d)=>{
+  const select=document.getElementById('group-select');
+  select.innerHTML='<option value="">-- Invalid PIN --</option>';
+});
+
 function joinGame(){
   const pin=document.getElementById('pin-input').value.trim();
   const gnum=document.getElementById('group-select').value;
   if(!pin||pin.length!==4){
     document.getElementById('join-error').textContent='Enter a 4-digit PIN!';
+    document.getElementById('join-error').style.display='block';
+    return;
+  }
+  if(!gnum){
+    document.getElementById('join-error').textContent='Select a group!';
     document.getElementById('join-error').style.display='block';
     return;
   }

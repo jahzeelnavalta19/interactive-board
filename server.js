@@ -49,6 +49,12 @@ io.on('connection',(socket)=>{
     console.log('IB Session created: '+pin);
   });
 
+  socket.on('ib-get-info',(data)=>{
+    const pin=data.pin;
+    if(!interactiveBoards[pin]){socket.emit('ib-info-error',{message:'Session not found!'});return;}
+    socket.emit('ib-info',{numGroups:interactiveBoards[pin].numGroups});
+  });
+
   socket.on('ib-join',(data)=>{
     const{pin,groupNum}=data;
     if(!interactiveBoards[pin]){socket.emit('ib-join-error',{message:'Session not found!'});return;}
@@ -59,7 +65,7 @@ io.on('connection',(socket)=>{
     if(interactiveBoards[pin].groups[groupNum]){
       interactiveBoards[pin].groups[groupNum].connected=true;
     }
-    socket.emit('ib-join-success',{pin,groupNum:parseInt(groupNum)});
+    socket.emit('ib-join-success',{pin,groupNum:parseInt(groupNum),numGroups:interactiveBoards[pin].numGroups});
     io.to(`ib-host-${pin}`).emit('ib-groups-update',{groups:interactiveBoards[pin].groups});
     console.log('Group '+groupNum+' joined '+pin);
   });
