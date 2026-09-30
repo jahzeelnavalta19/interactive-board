@@ -30,7 +30,7 @@ io.on('connection',(socket)=>{
     if(interactiveBoards[pin]){socket.emit('ib-created',{pin:generateCode()});return;}
     const numGroups=data.numGroups||4;
     const groups={};
-    for(let i=1;i<=numGroups;i++){groups[i]={name:'Group '+i,score:0,answer:'',submitted:false,judged:null};}
+    for(let i=1;i<=numGroups;i++){groups[i]={name:'Group '+i,score:0,answer:'',submitted:false,judged:null,answerOrder:null};}
     interactiveBoards[pin]={
       hostSocket:socket,
       groups:groups,
@@ -40,7 +40,8 @@ io.on('connection',(socket)=>{
       questionActive:false,
       points:1,
       timeLimit:30,
-      questionStartTime:null
+      questionStartTime:null,
+      answerCounter:0
     };
     socket.join(`ib-host-${pin}`);
     socket.gamePIN=pin;
@@ -69,10 +70,12 @@ io.on('connection',(socket)=>{
     g.timeLimit=data.timeLimit||30;
     g.questionActive=true;
     g.questionStartTime=Date.now();
+    g.answerCounter=0;
     Object.keys(g.groups).forEach(num=>{
       g.groups[num].answer='';
       g.groups[num].submitted=false;
       g.groups[num].judged=null;
+      g.groups[num].answerOrder=null;
     });
     io.to(`ib-${pin}`).emit('ib-question-start',{points:g.points,timeLimit:g.timeLimit});
     io.to(`ib-host-${pin}`).emit('ib-question-started',{points:g.points,timeLimit:g.timeLimit});
@@ -91,10 +94,13 @@ io.on('connection',(socket)=>{
     const g=interactiveBoards[pin];
     const num=socket.ibGroupNum;
     if(!num||!g.groups[num])return;
+    if(g.groups[num].submitted)return;
     g.groups[num].answer=data.answer;
     g.groups[num].submitted=true;
+    g.answerCounter=(g.answerCounter||0)+1;
+    g.groups[num].answerOrder=g.answerCounter;
     io.to(`ib-host-${pin}`).emit('ib-answer-received',{groupNum:num,answer:data.answer,groups:g.groups});
-    socket.emit('ib-answer-submitted');
+    socket.emit('ib-answer-submitted',{order:g.answerCounter});
   });
 
   socket.on('ib-judge',(data)=>{
@@ -115,10 +121,12 @@ io.on('connection',(socket)=>{
     const g=interactiveBoards[pin];
     g.currentQuestion++;
     g.questionActive=false;
+    g.answerCounter=0;
     Object.keys(g.groups).forEach(num=>{
       g.groups[num].answer='';
       g.groups[num].submitted=false;
       g.groups[num].judged=null;
+      g.groups[num].answerOrder=null;
     });
     io.to(`ib-host-${pin}`).emit('ib-ready-next',{groups:g.groups,questionNumber:g.currentQuestion+1});
     io.to(`ib-${pin}`).emit('ib-ready-next-player');

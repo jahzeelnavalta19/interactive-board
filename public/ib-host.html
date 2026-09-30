@@ -12,9 +12,9 @@
 .popup-box{background:#16213e;border-radius:24px;padding:40px;text-align:center;max-width:450px;width:90%;border:2px solid #9b59b6;box-shadow:0 0 50px rgba(155,89,182,0.3);}
 .popup-box h2{color:#ffd700;margin-bottom:20px;}
 .popup-box select,.popup-box input{width:100%;padding:14px;font-size:1.1em;border-radius:50px;background:#0a0a1a;color:white;border:2px solid #9b59b6;text-align:center;margin:10px 0;}
-.group-card{background:rgba(255,255,255,0.05);border-radius:16px;padding:15px;margin:10px 0;border-left:4px solid #9b59b6;}
+.group-card{background:rgba(255,255,255,0.05);border-radius:16px;padding:15px;margin:10px 0;border-left:4px solid #9b59b6;transition:all 0.3s ease;}
 .group-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
-.group-name{font-size:1.3em;font-weight:900;color:#ffd700;}
+.group-name{font-size:1.3em;font-weight:900;color:#ffd700;display:flex;align-items:center;}
 .group-score{font-size:1.2em;color:#00b894;font-weight:900;}
 .group-answer{background:rgba(0,0,0,0.3);padding:10px;border-radius:8px;font-size:1.1em;margin:8px 0;min-height:40px;color:#fff;}
 .judge-buttons{display:flex;gap:10px;margin-top:8px;}
@@ -22,9 +22,14 @@
 .btn-correct{background:#00b894;color:white;}
 .btn-wrong{background:#e94560;color:white;}
 .btn-correct:disabled,.btn-wrong:disabled{opacity:0.4;cursor:not-allowed;}
-.judged-correct{border-left-color:#00b894 !important;}
-.judged-wrong{border-left-color:#e94560 !important;}
+.judged-correct{border-left-color:#00b894 !important;background:rgba(0,184,148,0.1);}
+.judged-wrong{border-left-color:#e94560 !important;background:rgba(233,69,96,0.1);}
 #qrcode canvas,#qrcode img{border-radius:20px;padding:12px;background:white;box-shadow:0 8px 30px rgba(0,0,0,0.3);}
+.order-badge{padding:3px 12px;border-radius:20px;font-weight:900;margin-left:10px;font-size:0.75em;}
+.order-1{background:#ffd700;color:#1a1a2e;}
+.order-2{background:#c0c0c0;color:#1a1a2e;}
+.order-3{background:#cd7f32;color:#fff;}
+.order-other{background:#444;color:#fff;}
 </style>
 </head>
 <body>
@@ -181,15 +186,27 @@ function renderAnswers(groups){
   currentGroups=groups;
   const list=document.getElementById('answers-list');
   let html='';
-  for(let i=1;i<=Object.keys(groups).length;i++){
+  const sorted=Object.keys(groups).map(k=>parseInt(k)).sort((a,b)=>{
+    const ga=groups[a],gb=groups[b];
+    if(ga.answerOrder===null&&gb.answerOrder===null)return a-b;
+    if(ga.answerOrder===null)return 1;
+    if(gb.answerOrder===null)return -1;
+    return ga.answerOrder-gb.answerOrder;
+  });
+  sorted.forEach(i=>{
     const g=groups[i];
     if(g){
       let borderClass='';
       if(g.judged===true)borderClass='judged-correct';
       else if(g.judged===false)borderClass='judged-wrong';
+      let orderBadge='';
+      if(g.answerOrder===1)orderBadge='<span class="order-badge order-1">⚡ 1st</span>';
+      else if(g.answerOrder===2)orderBadge='<span class="order-badge order-2">2nd</span>';
+      else if(g.answerOrder===3)orderBadge='<span class="order-badge order-3">3rd</span>';
+      else if(g.answerOrder)orderBadge=`<span class="order-badge order-other">${g.answerOrder}th</span>`;
       html+=`<div class="group-card ${borderClass}">
         <div class="group-header">
-          <span class="group-name">${g.name}</span>
+          <span class="group-name">${g.name}${orderBadge}</span>
           <span class="group-score">${g.score} pts</span>
         </div>
         <div class="group-answer">${g.answer||'<span style="color:#666;">Waiting...</span>'}</div>
@@ -199,7 +216,7 @@ function renderAnswers(groups){
         </div>
       </div>`;
     }
-  }
+  });
   list.innerHTML=html;
 }
 
