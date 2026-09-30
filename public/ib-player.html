@@ -78,13 +78,21 @@ canvas.width=window.innerWidth;canvas.height=window.innerHeight;
 const pts=[];for(let i=0;i<30;i++)pts.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,r:Math.random()*2+1,speed:Math.random()*0.4+0.15,opacity:Math.random()*0.3+0.1});
 function anim(){ctx.clearRect(0,0,canvas.width,canvas.height);pts.forEach(p=>{p.y-=p.speed;if(p.y<-10){p.y=canvas.height+10;p.x=Math.random()*canvas.width;}ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,Math.PI*2);ctx.fillStyle=`rgba(255,255,255,${p.opacity})`;ctx.fill();});requestAnimationFrame(anim);}anim();
 
-const socket=io();
-let groupNum=0,timerInterval=null,currentPoints=0;
+const socket=io({
+  reconnection: true,
+  reconnectionDelay: 1000,
+  reconnectionAttempts: 20,
+  transports: ['websocket', 'polling']
+});
+let groupNum=0,timerInterval=null,currentPoints=0,currentPin='';
 
 document.getElementById('pin-input').addEventListener('input',function(){
   const pin=this.value.trim();
+  currentPin=pin;
+  clearInterval(window.refreshInterval);
   if(pin.length===4){
     socket.emit('ib-get-info',{pin});
+    window.refreshInterval=setInterval(()=>{socket.emit('ib-get-info',{pin});},3000);
   } else {
     const select=document.getElementById('group-select');
     select.innerHTML='<option value="">-- Enter PIN first --</option>';
@@ -93,12 +101,26 @@ document.getElementById('pin-input').addEventListener('input',function(){
 
 socket.on('ib-info',(d)=>{
   const select=document.getElementById('group-select');
+  const currentVal=select.value;
   select.innerHTML='';
+  const taken=d.takenGroups||[];
   for(let i=1;i<=d.numGroups;i++){
     const opt=document.createElement('option');
     opt.value=i;
-    opt.textContent='Group '+i;
+    if(taken.includes(i)){
+      opt.textContent='Group '+i+' (TAKEN)';
+      opt.disabled=true;
+      opt.style.color='#666';
+    } else {
+      opt.textContent='Group '+i;
+    }
     select.appendChild(opt);
+  }
+  if(currentVal && !taken.includes(parseInt(currentVal))){
+    select.value=currentVal;
+  } else {
+    const avail=[...select.options].find(o=>!o.disabled);
+    if(avail)select.value=avail.value;
   }
 });
 
@@ -215,6 +237,13 @@ socket.on('ib-game-ended',(d)=>{
 
 socket.on('ib-host-disconnected',()=>{
   document.body.innerHTML='<div class="container" style="text-align:center;"><div class="glass-card"><h1 style="color:#e94560;">😢 Host Disconnected</h1><p style="color:#aaa;">The teacher has ended the session.</p><button class="btn btn-primary" onclick="location.reload()">🔄 Reconnect</button></div></div>';
+});
+
+// Auto-reconnect: rejoin if disconnected and page reloads
+socket.on('connect',()=>{
+  if(groupNum>0 && currentPin){
+    socket.emit('ib-join',{pin:currentPin,groupNum:groupNum});
+  }
 });
 </script>
 </body>

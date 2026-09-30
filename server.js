@@ -5,7 +5,12 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  transports: ['websocket', 'polling'],
+  cors: { origin: '*' }
+});
 
 app.use(express.static('public', {
   setHeaders: (res, path) => {
@@ -52,21 +57,29 @@ io.on('connection',(socket)=>{
   socket.on('ib-get-info',(data)=>{
     const pin=data.pin;
     if(!interactiveBoards[pin]){socket.emit('ib-info-error',{message:'Session not found!'});return;}
-    socket.emit('ib-info',{numGroups:interactiveBoards[pin].numGroups});
+    const g=interactiveBoards[pin];
+    const takenGroups=[];
+    for(let i=1;i<=g.numGroups;i++){
+      if(g.groups[i] && g.groups[i].connected){takenGroups.push(i);}
+    }
+    socket.emit('ib-info',{numGroups:g.numGroups,takenGroups:takenGroups});
   });
 
   socket.on('ib-join',(data)=>{
     const{pin,groupNum}=data;
     if(!interactiveBoards[pin]){socket.emit('ib-join-error',{message:'Session not found!'});return;}
+    const g=interactiveBoards[pin];
+    if(g.groups[groupNum] && g.groups[groupNum].connected){
+      socket.emit('ib-join-error',{message:'Group '+groupNum+' is already taken! Pick another.'});
+      return;
+    }
     socket.join(`ib-${pin}`);
     socket.gamePIN=pin;
     socket.isIbPlayer=true;
     socket.ibGroupNum=parseInt(groupNum);
-    if(interactiveBoards[pin].groups[groupNum]){
-      interactiveBoards[pin].groups[groupNum].connected=true;
-    }
-    socket.emit('ib-join-success',{pin,groupNum:parseInt(groupNum),numGroups:interactiveBoards[pin].numGroups});
-    io.to(`ib-host-${pin}`).emit('ib-groups-update',{groups:interactiveBoards[pin].groups});
+    if(g.groups[groupNum]){g.groups[groupNum].connected=true;}
+    socket.emit('ib-join-success',{pin,groupNum:parseInt(groupNum),numGroups:g.numGroups});
+    io.to(`ib-host-${pin}`).emit('ib-groups-update',{groups:g.groups});
     console.log('Group '+groupNum+' joined '+pin);
   });
 
