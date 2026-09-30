@@ -128,8 +128,11 @@ socket.on('ib-created',(d)=>{
   document.getElementById('setup-popup').style.display='none';
   document.getElementById('main-container').style.display='block';
   document.getElementById('game-pin').textContent=gamePIN;
-  const url='https://interactive-board-ovbw.onrender.com/ib-player.html';
+  
+  // AUTO-DETECT URL
+  const url=window.location.origin+'/ib-player.html';
   document.getElementById('big-url').textContent=url;
+  
   const qrContainer=document.getElementById('qrcode');
   qrContainer.innerHTML='';
   new QRCode(qrContainer,{text:url,width:180,height:180,colorDark:"#1a1a2e",colorLight:"#ffffff"});
