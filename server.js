@@ -24,7 +24,6 @@ function generateCode(){return Math.floor(1000+Math.random()*9000).toString();}
 io.on('connection',(socket)=>{
   console.log('Connected: '+socket.id);
 
-  // ===== INTERACTIVE BOARD =====
   socket.on('ib-create',(data)=>{
     const pin=generateCode();
     if(interactiveBoards[pin]){socket.emit('ib-created',{pin:generateCode()});return;}

@@ -38,14 +38,21 @@
 <div class="blob blob-3"></div>
 <canvas class="particles" id="particles"></canvas>
 
-<!-- SETUP POPUP -->
 <div class="popup-overlay" id="setup-popup">
 <div class="popup-box">
 <h2>🎯 Interactive Board</h2>
 <p style="color:#aaa;margin-bottom:10px;">Teacher Control Panel</p>
 <p style="color:#aaa;margin:15px 0;">Select Section</p>
 <select id="ib-section-select">
-<option value="11-TAURUS">11-TAURUS</option><option value="11-GEMINI">11-GEMINI</option><option value="11-AQUILA">11-AQUILA</option><option value="11-PISCES">11-PISCES</option><option value="11-ARIES">11-ARIES</option><option value="11-SCORPIUS">11-SCORPIUS</option><option value="12-PYTHAGORAS">12-PYTHAGORAS</option><option value="11-AQUARIUS">11-AQUARIUS</option>
+<option value="11-TAURUS">11-TAURUS</option>
+<option value="11-GEMINI">11-GEMINI</option>
+<option value="11-AQUILA">11-AQUILA</option>
+<option value="11-PISCES">11-PISCES</option>
+<option value="11-ARIES">11-ARIES</option>
+<option value="11-SCORPIUS">11-SCORPIUS</option>
+<option value="12-PYTHAGORAS">12-PYTHAGORAS</option>
+<option value="11-AQUARIUS">11-AQUARIUS</option>
+<option value="12-CONFUCIUS">12-CONFUCIUS</option>
 </select>
 <p style="color:#aaa;margin:15px 0;">Number of Groups</p>
 <select id="ib-group-count">
@@ -138,11 +145,21 @@ socket.on('ib-groups-update',(d)=>{
 function renderGroups(groups){
   const list=document.getElementById('group-list');
   let html='';
-  for(let i=1;i<=Object.keys(groups).length;i++){
+  let connectedCount=0;
+  let totalCount=Object.keys(groups).length;
+  for(let i=1;i<=totalCount;i++){
     const g=groups[i];
     if(g){
-      html+=`<div class="player-item"><span style="font-size:1.3em;font-weight:900;color:#9b59b6;">${g.name}</span><span style="flex:1;"></span><span style="color:#aaa;">${g.score} pts</span></div>`;
+      if(g.connected)connectedCount++;
+      const statusBadge=g.connected
+        ?'<span style="background:#00b894;color:white;padding:4px 12px;border-radius:20px;font-weight:900;font-size:0.75em;">✅ CONNECTED</span>'
+        :'<span style="background:#666;color:#ccc;padding:4px 12px;border-radius:20px;font-weight:900;font-size:0.75em;">⏳ WAITING</span>';
+      const opacity=g.connected?'1':'0.5';
+      html+=`<div class="player-item" style="opacity:${opacity};"><span style="font-size:1.3em;font-weight:900;color:#9b59b6;">${g.name}</span><span style="flex:1;"></span>${statusBadge}<span style="color:#aaa;margin-left:12px;">${g.score} pts</span></div>`;
     }
+  }
+  if(connectedCount>0){
+    html+=`<p style="color:#ffd700;font-weight:700;margin-top:10px;">👥 ${connectedCount} of ${totalCount} groups connected</p>`;
   }
   list.innerHTML=html||'<p style="color:#aaa;">Waiting for groups...</p>';
 }
